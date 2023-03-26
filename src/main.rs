@@ -1,43 +1,93 @@
 use std::fs::File;
 use std::io::{BufReader, BufRead};
 use std::env;
+
+
+#[derive(Clone)]
 pub struct Posicion
 {
     x: usize,
     y:usize,
 }
-pub struct Tablero
+impl Copy for Posicion{}
+impl Posicion
 {
-    tabla: Vec<Vec<String>>,
-}
-impl Tablero
+    pub fn esta_en_diagonal_de(origen:Self,destino:Posicion)->bool
+    { 
+        origen.x.abs_diff(origen.y) == destino.x.abs_diff(destino.y)
+    }
+    pub fn esta_misma_linea_de(origen:Self,destino:Posicion)-> bool
     {
-        pub fn crear_tabla(nombre_archivo:String)-> Vec<Vec<String>>
+        origen.x == destino.x || origen.y == destino.y
+    }
+
+    pub fn esta_a_una_casilla_de(origen:Self,destino:Posicion)-> bool
+    {
+        (origen.x == destino.x  && origen.y.abs_diff(destino.y) == 1)
+        || (origen.y == destino.y && origen.x.abs_diff(destino.x)==1)
+    }
+    pub fn esta_en_l_de(origen:Self,destino:Posicion)-> bool
+    {
+        (origen.x.abs_diff(destino.x)==2 && origen.y.abs_diff(destino.y)==3)
+        || (origen.y.abs_diff(destino.y)==2 && origen.x.abs_diff(destino.x) == 3)
+    }
+    pub fn esta_en_frente_de(origen:Self,destino:Posicion,color:&Color)-> bool
+    {
+        match color
+        {
+            Color::Blanco => origen.x == destino.x && origen.y == destino.y +1,
+            Color::Negro => origen.x == destino.x && origen.y == destino.y -1,
+        
+        }
+    }
+    
+    
+}
+pub fn crear_tabla(nombre_archivo:String)-> Vec<Vec<String>>
     {
         
         let file = File::open(nombre_archivo).expect("Failed to open file :(");
         let reader = BufReader::new(file);
 
     
-    let mut tabla: Vec<Vec<String>> = Vec::new();
-    for line in reader.lines() {
-        let fila: Vec<String> = line.unwrap()
-            .split_whitespace()
-            .map(|x| String::from(x))
-            .collect();
-        tabla.push(fila);
-        
-    }
-    tabla
-    }
-        fn new(archivo: String)->Tablero
+        let mut tabla: Vec<Vec<String>> = Vec::new();
+        for line in reader.lines() 
         {
-            let tabla = Self::crear_tabla(archivo);
-           
+            let fila: Vec<String> = line.unwrap()
+                .split_whitespace()
+                .map(|x| String::from(x))
+                .collect();
+            tabla.push(fila);
+        
+        }
+        tabla
+    }
+pub struct Tablero
+{
+    pieza_blanca :Pieza,
+    pieza_negra:Pieza,
+}
+impl Tablero
+    {
+        fn new(tabla:&Vec<Vec<String>>)->Tablero
+        {
+            
+            
+            let (pos_blanca,id_blanca) = Tablero::buscar_pieza(&tabla,|identificador_blanca|Tablero::es_blanca(identificador_blanca));
+            
+            let pieza_blanca = Pieza::new(definir_tipo(&id_blanca),pos_blanca,Color::Blanco);
+                   
+
+            let (pos_negra,id_negra) = Tablero::buscar_pieza(&tabla,|identificador_negra|Tablero::es_negra(identificador_negra));
+            
+            let pieza_negra = Pieza::new(definir_tipo(&id_negra),pos_negra,Color::Negro);
+                   
+            
             Tablero
             {
-                tabla,
-
+                pieza_blanca,
+                pieza_negra,
+                 
             }
         }
         pub fn es_blanca(identificador:&char)->bool
@@ -51,14 +101,14 @@ impl Tablero
         }
 
 
-        pub fn buscar_pieza<F>(&self,condicion:F,color:&str)->Result<(Posicion,char),String>
+        pub fn buscar_pieza<F>(tabla:&Vec<Vec<String>>,condicion:F)->(Posicion,char)
             where F: Fn(&char)->bool
         {
             let (mut fila, mut columna) = (0,0);
             let mut encontrado = false;
             let mut identificador:char = '0';
             
-            for row in &self.tabla
+            for row in tabla
         {
         
             for casillero in row
@@ -90,18 +140,12 @@ impl Tablero
 
             
         } 
-        if encontrado && identificador != '0' 
-        {
-            let pos_pieza = Posicion{
-                x: fila,
-                y:columna,
-            };
-            Ok((pos_pieza,identificador))
-        }
-        else
-        {
-            Err(String::from("No se encontro ninguna pieza en el tablero de color ") + color + ".\n")
-        }
+
+        let pos_pieza = Posicion{
+            x: fila,
+            y:columna,
+        };
+        (pos_pieza,identificador)
 
 
         }
@@ -172,20 +216,12 @@ impl Pieza
     pub fn puedo_moverme_desde_a(&self,destino:Posicion)->bool
         {
             match self.tipo {
-                Tipo::Rey => self.posicion.x == destino.x +1 || self.posicion.x == destino.x -1 || self.posicion.y == destino.y +1 || self.posicion.y == destino.y -1 || self.posicion.x == destino.x ,
-                Tipo::Dama => true,
-                Tipo::Alfil => true,
-                Tipo::Caballo => true,
-                Tipo::Torre=> true,
-                Tipo::Peon=> 
-                {
-                    match self.color
-                    {
-                        Color::Blanco => true,
-                        Color::Negro => true,
-                    }
-                
-                }
+                Tipo::Rey => Posicion::esta_a_una_casilla_de(self.posicion,destino),
+                Tipo::Dama => Posicion::esta_en_diagonal_de(self.posicion, destino) || Posicion::esta_misma_linea_de(self.posicion, destino),
+                Tipo::Alfil => Posicion::esta_en_diagonal_de(self.posicion, destino),
+                Tipo::Caballo => Posicion::esta_en_l_de(self.posicion, destino),
+                Tipo::Torre=> Posicion::esta_misma_linea_de(self.posicion, destino),
+                Tipo::Peon=> Posicion::esta_en_frente_de(self.posicion, destino, &self.color),
 
         }
 
@@ -197,34 +233,30 @@ fn main()
 {
     let args: Vec<String> = env::args().collect();
 
-    let file_path = &args[1];
+    let archivo = &args[1];
 
-    let t = Tablero::new(String::from(file_path));
+    let tabla = crear_tabla(archivo.to_string());
 
-    
-    
-    match Tablero::buscar_pieza(&t,|identificador_blanca|Tablero::es_blanca(identificador_blanca),"blanca")
+    let t = Tablero::new(&tabla);
+
+    let puede_comer_blanca:bool = Pieza::puedo_moverme_desde_a(&t.pieza_blanca,t.pieza_negra.posicion);
+    let puede_comer_negra:bool = Pieza::puedo_moverme_desde_a(&t.pieza_negra, t.pieza_blanca.posicion);
+
+    if puede_comer_blanca && puede_comer_negra
     {
-        Ok((pos_blanca,identificador)) => 
-        {
-            let pieza_blanca = Pieza::new(definir_tipo(&identificador),pos_blanca,Color::Blanco);
-            println!("La pieza blanca es un {:?} y esta en {},{}",pieza_blanca.tipo,pieza_blanca.posicion.x,pieza_blanca.posicion.y);
-        },
-        Err(mensaje) => println!("{}",mensaje),
+        println!("empate\n");
     }
-
-    match Tablero::buscar_pieza(&t,|identificador_negra|Tablero::es_negra(identificador_negra),"negra")
+    else if puede_comer_blanca && !puede_comer_negra
     {
-        Ok((pos_negra,identificador)) => 
-        {
-            let pieza_negra = Pieza::new(definir_tipo(&identificador),pos_negra,Color::Negro);
-            println!("La pieza negra es un {:?} y esta en {},{}",pieza_negra.tipo,pieza_negra.posicion.x,pieza_negra.posicion.y);
-        }
-        Err(mensaje) => println!("{}",mensaje),
+        println!("gana blanca.\n");
     }
-
-
-    
+    else if puede_comer_negra && !puede_comer_blanca
+    {
+        println!("gana  negra.\n");
+    }
+    else {
+        println!("ambos pierden.\n");
+    }
     
 
 
