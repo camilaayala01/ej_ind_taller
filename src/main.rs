@@ -1,3 +1,4 @@
+
 use std::fs::File;
 use std::io::{BufReader, BufRead};
 use std::env;
@@ -69,26 +70,28 @@ pub struct Tablero
 }
 impl Tablero
     {
-        fn new(tabla:&Vec<Vec<String>>)->Tablero
+        fn new(tabla:&Vec<Vec<String>>)->Result<Tablero,String>
         {
-            
-            
-            let (pos_blanca,id_blanca) = Tablero::buscar_pieza(&tabla,|identificador_blanca|Tablero::es_blanca(identificador_blanca));
-            
-            let pieza_blanca = Pieza::new(definir_tipo(&id_blanca),pos_blanca,Color::Blanco);
-                   
-
-            let (pos_negra,id_negra) = Tablero::buscar_pieza(&tabla,|identificador_negra|Tablero::es_negra(identificador_negra));
-            
-            let pieza_negra = Pieza::new(definir_tipo(&id_negra),pos_negra,Color::Negro);
-                   
-            
-            Tablero
+            if Tablero::buscar_pieza(&tabla,|identificador_blanca|Tablero::es_blanca(identificador_blanca),Color::Blanco).is_none()
             {
-                pieza_blanca,
-                pieza_negra,
-                 
+                Err(String::from("No encontre blanca.\n"))
             }
+            else if Tablero::buscar_pieza(&tabla,|identificador_negra|Tablero::es_negra(identificador_negra),Color::Negro).is_none()
+            {
+                Err(String::from("No encontre negra.\n"))
+            }
+            else 
+            {
+                Ok(
+                    Tablero
+                    {
+                        pieza_blanca: Tablero::buscar_pieza(&tabla,|identificador_blanca|Tablero::es_blanca(identificador_blanca),Color::Blanco).unwrap(),
+                        pieza_negra : Tablero::buscar_pieza(&tabla,|identificador_negra|Tablero::es_negra(identificador_negra),Color::Negro).unwrap(),
+                    }
+                )
+            }
+            
+            
         }
         pub fn es_blanca(identificador:&char)->bool
         {
@@ -101,7 +104,7 @@ impl Tablero
         }
 
 
-        pub fn buscar_pieza<F>(tabla:&Vec<Vec<String>>,condicion:F)->(Posicion,char)
+        pub fn buscar_pieza<F>(tabla:&Vec<Vec<String>>,condicion:F,color:Color)->Option<Pieza>
             where F: Fn(&char)->bool
         {
             let (mut fila, mut columna) = (0,0);
@@ -119,7 +122,7 @@ impl Tablero
                     Some(contenido) => 
                     {
                         
-                        if contenido != '_' && condicion(&contenido)
+                        if condicion(&contenido)
                         {
                             identificador = contenido;
                             encontrado = true;
@@ -137,15 +140,18 @@ impl Tablero
                 }
             columna = 0;
             fila = fila+1;
-
-            
+        }
+        if !encontrado
+        {
+            return None;
         } 
 
         let pos_pieza = Posicion{
             x: fila,
             y:columna,
         };
-        (pos_pieza,identificador)
+
+        Some(Pieza::new(definir_tipo(&identificador), pos_pieza, color))
 
 
         }
@@ -165,24 +171,25 @@ pub enum Tipo
 
 pub fn definir_tipo(identificador:&char)-> Tipo
 {
-    if *identificador == 'r'  || *identificador == 'R'
+    let id = identificador.to_ascii_lowercase();
+    if id == 'r'  
     {
         return Tipo::Rey;
     }
-    if *identificador == 'd'  || *identificador == 'D'
+    if id == 'd' 
     {
         return Tipo::Dama;
 
     }
-    if *identificador == 'a'  || *identificador == 'A'
+    if id == 'a' 
     {
         return Tipo::Alfil; 
     }
-    if *identificador == 'c'  || *identificador == 'C'
+    if id == 'c' 
     {
         return Tipo::Caballo;
     }
-    if *identificador == 't'  || *identificador == 'T'
+    if id== 't'
     {
         return Tipo::Torre;
     }
@@ -235,17 +242,20 @@ fn main()
 
     let archivo = &args[1];
 
-    let tabla = crear_tabla(archivo.to_string());
-
-    let t = Tablero::new(&tabla);
-
-    let puede_comer_blanca:bool = Pieza::puedo_moverme_desde_a(&t.pieza_blanca,t.pieza_negra.posicion);
-    let puede_comer_negra:bool = Pieza::puedo_moverme_desde_a(&t.pieza_negra, t.pieza_blanca.posicion);
-
-    if puede_comer_blanca && puede_comer_negra
+    let tabla = 
+    crear_tabla(archivo.to_string());
+    
+    match Tablero::new(&tabla)
     {
-        println!("empate\n");
-    }
+        Ok(t)=> 
+        {
+            let puede_comer_blanca:bool = Pieza::puedo_moverme_desde_a(&t.pieza_blanca,t.pieza_negra.posicion);
+            let puede_comer_negra:bool = Pieza::puedo_moverme_desde_a(&t.pieza_negra, t.pieza_blanca.posicion);
+
+        if puede_comer_blanca && puede_comer_negra
+        {
+            println!("empate\n");
+        }
     else if puede_comer_blanca && !puede_comer_negra
     {
         println!("gana blanca.\n");
@@ -257,6 +267,18 @@ fn main()
     else {
         println!("ambos pierden.\n");
     }
+
+        }
+        Err(mensaje)=>
+        {
+            println!("{}",mensaje);
+            return;
+        }
+    }
+
+    
+
+    
     
 
 
